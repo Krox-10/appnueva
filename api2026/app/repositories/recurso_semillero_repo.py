@@ -1,5 +1,7 @@
+from fastapi import HTTPException
 from app.core.database import Database
 from app.models.recurso_semillero import RecursoSemillero
+
 
 class RecursoSemilleroRepository:
 
@@ -7,125 +9,184 @@ class RecursoSemilleroRepository:
         self.db = Database()
 
     def obtener_todos(self):
-        conn = self.db.get_connection()
-        cursor = conn.cursor()
+        try:
+            conn = self.db.get_connection()
+            cursor = conn.cursor()
 
-        cursor.execute("""
-            SELECT *
-            FROM recurso_semillero
-            ORDER BY id_recurso ASC;
-        """)
+            cursor.execute("""
+                SELECT *
+                FROM recurso_semillero
+                ORDER BY id_recurso ASC;
+            """)
 
-        recursos = cursor.fetchall()
-        conn.close()
+            recursos = cursor.fetchall()
+            conn.close()
 
-        return recursos
+            return recursos
+
+        except Exception as e:
+            raise HTTPException(
+                status_code=500,
+                detail="Error al obtener los recursos"
+            )
 
     def obtener_por_id(self, recurso_id: int):
-        conn = self.db.get_connection()
-        cursor = conn.cursor()
+        try:
+            conn = self.db.get_connection()
+            cursor = conn.cursor()
 
-        cursor.execute("""
-            SELECT *
-            FROM recurso_semillero
-            WHERE id_recurso = %s;
-        """, (recurso_id,))
+            cursor.execute("""
+                SELECT *
+                FROM recurso_semillero
+                WHERE id_recurso = %s;
+            """, (recurso_id,))
 
-        recurso = cursor.fetchone()
-        conn.close()
+            recurso = cursor.fetchone()
+            conn.close()
 
-        return recurso
+            if not recurso:
+                raise HTTPException(
+                    status_code=404,
+                    detail="Recurso no encontrado"
+                )
+
+            return recurso
+
+        except HTTPException:
+            raise
+
+        except Exception as e:
+            raise HTTPException(
+                status_code=500,
+                detail="Error al obtener el recurso"
+            )
 
     def crear(self, recurso: RecursoSemillero):
-        conn = self.db.get_connection()
-        cursor = conn.cursor()
+        try:
+            conn = self.db.get_connection()
+            cursor = conn.cursor()
 
-        query = """
-            INSERT INTO recurso_semillero
-            (
-                id_semillero,
-                nombre,
-                tipo,
-                cantidad,
-                descripcion,
-                id_estado,
-                fecha_registro
+            query = """
+                INSERT INTO recurso_semillero
+                (
+                    id_semillero,
+                    nombre,
+                    tipo,
+                    cantidad,
+                    descripcion,
+                    estado
+                )
+                VALUES (%s, %s, %s, %s, %s, %s)
+                RETURNING id_recurso;
+            """
+
+            cursor.execute(
+                query,
+                (
+                    recurso.id_semillero,
+                    recurso.nombre,
+                    recurso.tipo,
+                    recurso.cantidad,
+                    recurso.descripcion,
+                    recurso.estado
+                )
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
-            RETURNING id_recurso;
-        """
 
-        cursor.execute(
-            query,
-            (
-                recurso.id_semillero,
-                recurso.nombre,
-                recurso.tipo,
-                recurso.cantidad,
-                recurso.descripcion,
-                recurso.id_estado,
-                recurso.fecha_registro
+            nuevo_id = cursor.fetchone()["id_recurso"]
+
+            conn.commit()
+            conn.close()
+
+            return nuevo_id
+
+        except Exception as e:
+            raise HTTPException(
+                status_code=500,
+                detail="Error al registrar el recurso"
             )
-        )
-
-        nuevo_id = cursor.fetchone()["id_recurso"]
-
-        conn.commit()
-        conn.close()
-
-        return nuevo_id
 
     def eliminar(self, recurso_id: int):
-        conn = self.db.get_connection()
-        cursor = conn.cursor()
+        try:
+            conn = self.db.get_connection()
+            cursor = conn.cursor()
 
-        cursor.execute("""
-            DELETE FROM recurso_semillero
-            WHERE id_recurso = %s
-            RETURNING id_recurso;
-        """, (recurso_id,))
+            cursor.execute("""
+                DELETE FROM recurso_semillero
+                WHERE id_recurso = %s
+                RETURNING id_recurso;
+            """, (recurso_id,))
 
-        eliminado = cursor.fetchone()
+            eliminado = cursor.fetchone()
 
-        conn.commit()
-        conn.close()
+            conn.commit()
+            conn.close()
 
-        return eliminado is not None
+            if eliminado is None:
+                raise HTTPException(
+                    status_code=404,
+                    detail="Recurso no encontrado"
+                )
+
+            return True
+
+        except HTTPException:
+            raise
+
+        except Exception as e:
+            raise HTTPException(
+                status_code=500,
+                detail="Error al eliminar el recurso"
+            )
 
     def actualizar(self, recurso_id: int, recurso: RecursoSemillero):
-        conn = self.db.get_connection()
-        cursor = conn.cursor()
+        try:
+            conn = self.db.get_connection()
+            cursor = conn.cursor()
 
-        query = """
-            UPDATE recurso_semillero
-            SET id_semillero = %s,
-                nombre = %s,
-                tipo = %s,
-                cantidad = %s,
-                descripcion = %s,
-                id_estado = %s,
-                fecha_registro = %s
-            WHERE id_recurso = %s
-            RETURNING id_recurso;
-        """
+            query = """
+                UPDATE recurso_semillero
+                SET id_semillero = %s,
+                    nombre = %s,
+                    tipo = %s,
+                    cantidad = %s,
+                    descripcion = %s,
+                    estado = %s,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id_recurso = %s
+                RETURNING id_recurso;
+            """
 
-        cursor.execute(
-            query,
-            (
-                recurso.id_semillero,
-                recurso.nombre,
-                recurso.tipo,
-                recurso.cantidad,
-                recurso.descripcion,
-                recurso.id_estado,
-                recurso.fecha_registro,
-                recurso_id
+            cursor.execute(
+                query,
+                (
+                    recurso.id_semillero,
+                    recurso.nombre,
+                    recurso.tipo,
+                    recurso.cantidad,
+                    recurso.descripcion,
+                    recurso.estado,
+                    recurso_id
+                )
             )
-        )
 
-        actualizado = cursor.fetchone()
+            actualizado = cursor.fetchone()
 
-        conn.commit()
-        conn.close()
+            conn.commit()
+            conn.close()
 
-        return actualizado is not None
+            if actualizado is None:
+                raise HTTPException(
+                    status_code=404,
+                    detail="Recurso no encontrado"
+                )
+
+            return True
+
+        except HTTPException:
+            raise
+
+        except Exception as e:
+            raise HTTPException(
+                status_code=500,
+                detail="Error al actualizar el recurso"
+            )

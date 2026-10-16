@@ -1,5 +1,7 @@
+from fastapi import HTTPException
 from app.core.database import Database
 from app.models.producto_investigacion import ProductoInvestigacion
+
 
 class ProductoInvestigacionRepository:
 
@@ -7,125 +9,184 @@ class ProductoInvestigacionRepository:
         self.db = Database()
 
     def obtener_todos(self):
-        conn = self.db.get_connection()
-        cursor = conn.cursor()
+        try:
+            conn = self.db.get_connection()
+            cursor = conn.cursor()
 
-        cursor.execute("""
-            SELECT *
-            FROM producto_investigacion
-            ORDER BY id_producto ASC;
-        """)
+            cursor.execute("""
+                SELECT *
+                FROM producto_investigacion
+                ORDER BY id_producto ASC;
+            """)
 
-        productos = cursor.fetchall()
-        conn.close()
+            productos = cursor.fetchall()
+            conn.close()
 
-        return productos
+            return productos
+
+        except Exception as e:
+            raise HTTPException(
+                status_code=500,
+                detail="Error al obtener los productos"
+            )
 
     def obtener_por_id(self, producto_id: int):
-        conn = self.db.get_connection()
-        cursor = conn.cursor()
+        try:
+            conn = self.db.get_connection()
+            cursor = conn.cursor()
 
-        cursor.execute("""
-            SELECT *
-            FROM producto_investigacion
-            WHERE id_producto = %s;
-        """, (producto_id,))
+            cursor.execute("""
+                SELECT *
+                FROM producto_investigacion
+                WHERE id_producto = %s;
+            """, (producto_id,))
 
-        producto = cursor.fetchone()
-        conn.close()
+            producto = cursor.fetchone()
+            conn.close()
 
-        return producto
+            if not producto:
+                raise HTTPException(
+                    status_code=404,
+                    detail="Producto no encontrado"
+                )
+
+            return producto
+
+        except HTTPException:
+            raise
+
+        except Exception as e:
+            raise HTTPException(
+                status_code=500,
+                detail="Error al obtener el producto"
+            )
 
     def crear(self, producto: ProductoInvestigacion):
-        conn = self.db.get_connection()
-        cursor = conn.cursor()
+        try:
+            conn = self.db.get_connection()
+            cursor = conn.cursor()
 
-        query = """
-            INSERT INTO producto_investigacion
-            (
-                id_investigacion,
-                titulo,
-                tipo,
-                descripcion,
-                fecha_publicacion,
-                archivo_url
+            query = """
+                INSERT INTO producto_investigacion
+                (
+                    id_investigacion,
+                    titulo,
+                    tipo,
+                    descripcion,
+                    archivo_url,
+                    estado
+                )
+                VALUES (%s, %s, %s, %s, %s, %s)
+                RETURNING id_producto;
+            """
+
+            cursor.execute(
+                query,
+                (
+                    producto.id_investigacion,
+                    producto.titulo,
+                    producto.tipo,
+                    producto.descripcion,
+                    producto.archivo_url,
+                    producto.estado
+                )
             )
-            VALUES (%s, %s, %s, %s, %s, %s)
-            RETURNING id_producto;
-        """
 
-        cursor.execute(
-            query,
-            (
-                producto.id_investigacion,
-                producto.titulo,
-                producto.tipo,
-                producto.descripcion,
-                producto.fecha_publicacion,
-                producto.archivo_url
+            nuevo_id = cursor.fetchone()["id_producto"]
+
+            conn.commit()
+            conn.close()
+
+            return nuevo_id
+
+        except Exception as e:
+            raise HTTPException(
+                status_code=500,
+                detail="Error al registrar el producto"
             )
-        )
-
-        nuevo_id = cursor.fetchone()["id_producto"]
-
-        conn.commit()
-        conn.close()
-
-        return nuevo_id
 
     def eliminar(self, producto_id: int):
-        conn = self.db.get_connection()
-        cursor = conn.cursor()
+        try:
+            conn = self.db.get_connection()
+            cursor = conn.cursor()
 
-        cursor.execute("""
-            DELETE FROM producto_investigacion
-            WHERE id_producto = %s
-            RETURNING id_producto;
-        """, (producto_id,))
+            cursor.execute("""
+                DELETE FROM producto_investigacion
+                WHERE id_producto = %s
+                RETURNING id_producto;
+            """, (producto_id,))
 
-        eliminado = cursor.fetchone()
+            eliminado = cursor.fetchone()
 
-        conn.commit()
-        conn.close()
+            conn.commit()
+            conn.close()
 
-        return eliminado is not None
+            if eliminado is None:
+                raise HTTPException(
+                    status_code=404,
+                    detail="Producto no encontrado"
+                )
 
-    def actualizar(
-        self,
-        producto_id: int,
-        producto: ProductoInvestigacion
-    ):
-        conn = self.db.get_connection()
-        cursor = conn.cursor()
+            return True
 
-        query = """
-            UPDATE producto_investigacion
-            SET id_investigacion = %s,
-                titulo = %s,
-                tipo = %s,
-                descripcion = %s,
-                fecha_publicacion = %s,
-                archivo_url = %s
-            WHERE id_producto = %s
-            RETURNING id_producto;
-        """
+        except HTTPException:
+            raise
 
-        cursor.execute(
-            query,
-            (
-                producto.id_investigacion,
-                producto.titulo,
-                producto.tipo,
-                producto.descripcion,
-                producto.fecha_publicacion,
-                producto.archivo_url,
-                producto_id
+        except Exception as e:
+            raise HTTPException(
+                status_code=500,
+                detail="Error al eliminar el producto"
             )
-        )
 
-        actualizado = cursor.fetchone()
+    def actualizar(self, producto_id: int, producto: ProductoInvestigacion):
+        try:
+            conn = self.db.get_connection()
+            cursor = conn.cursor()
 
-        conn.commit()
-        conn.close()
+            query = """
+                UPDATE producto_investigacion
+                SET id_investigacion = %s,
+                    titulo = %s,
+                    tipo = %s,
+                    descripcion = %s,
+                    archivo_url = %s,
+                    estado = %s,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id_producto = %s
+                RETURNING id_producto;
+            """
 
-        return actualizado is not None
+            cursor.execute(
+                query,
+                (
+                    producto.id_investigacion,
+                    producto.titulo,
+                    producto.tipo,
+                    producto.descripcion,
+                    producto.archivo_url,
+                    producto.estado,
+                    producto_id
+                )
+            )
+
+            actualizado = cursor.fetchone()
+
+            conn.commit()
+            conn.close()
+
+            if actualizado is None:
+                raise HTTPException(
+                    status_code=404,
+                    detail="Producto no encontrado"
+                )
+
+            return True
+
+        except HTTPException:
+            raise
+
+        except Exception as e:
+            raise HTTPException(
+                status_code=500,
+                detail="Error al actualizar el producto"
+            )

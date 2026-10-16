@@ -1,5 +1,7 @@
+from fastapi import HTTPException
 from app.core.database import Database
 from app.models.usuario import Usuario
+
 
 class UsuarioRepository:
 
@@ -7,129 +9,243 @@ class UsuarioRepository:
         self.db = Database()
 
     def obtener_todos(self):
-        conn = self.db.get_connection()
-        cursor = conn.cursor()
+        conn = None
+        try:
+            conn = self.db.get_connection()
 
-        cursor.execute("""
-            SELECT *
-            FROM usuario
-            ORDER BY id_usuario ASC;
-        """)
+            if conn is None:
+                raise HTTPException(
+                    status_code=500,
+                    detail="No fue posible conectar con la base de datos"
+                )
 
-        usuarios = cursor.fetchall()
-        conn.close()
+            cursor = conn.cursor()
 
-        return usuarios
+            cursor.execute("""
+                SELECT *
+                FROM usuario
+                ORDER BY id_usuario ASC;
+            """)
+
+            return cursor.fetchall()
+
+        except HTTPException:
+            raise
+        except Exception:
+            raise HTTPException(
+                status_code=500,
+                detail="Error al obtener los usuarios"
+            )
+        finally:
+            if conn is not None:
+                conn.close()
 
     def obtener_por_id(self, usuario_id: int):
-        conn = self.db.get_connection()
-        cursor = conn.cursor()
+        conn = None
+        try:
+            conn = self.db.get_connection()
 
-        cursor.execute("""
-            SELECT *
-            FROM usuario
-            WHERE id_usuario = %s;
-        """, (usuario_id,))
+            if conn is None:
+                raise HTTPException(
+                    status_code=500,
+                    detail="No fue posible conectar con la base de datos"
+                )
 
-        usuario = cursor.fetchone()
-        conn.close()
+            cursor = conn.cursor()
 
-        return usuario
+            cursor.execute("""
+                SELECT *
+                FROM usuario
+                WHERE id_usuario = %s;
+            """, (usuario_id,))
+
+            usuario = cursor.fetchone()
+
+            if usuario is None:
+                raise HTTPException(
+                    status_code=404,
+                    detail="Usuario no encontrado"
+                )
+
+            return usuario
+
+        except HTTPException:
+            raise
+        except Exception:
+            raise HTTPException(
+                status_code=500,
+                detail="Error al obtener el usuario"
+            )
+        finally:
+            if conn is not None:
+                conn.close()
 
     def crear(self, usuario: Usuario):
-        conn = self.db.get_connection()
-        cursor = conn.cursor()
+        conn = None
+        try:
+            conn = self.db.get_connection()
 
-        query = """
-            INSERT INTO usuario
-            (
-                id_rol,
-                id_semillero,
-                nombre_usuario,
-                correo,
-                documento,
-                telefono,
-                fecha_registro,
-                id_estado
-            )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-            RETURNING id_usuario;
-        """
+            if conn is None:
+                raise HTTPException(
+                    status_code=500,
+                    detail="No fue posible conectar con la base de datos"
+                )
 
-        cursor.execute(
-            query,
-            (
+            cursor = conn.cursor()
+
+            cursor.execute("""
+                INSERT INTO usuario (
+                    id_rol,
+                    id_semillero,
+                    nombre_usuario,
+                    correo,
+                    documento,
+                    telefono,
+                    estado,
+                    contrasena
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                RETURNING id_usuario;
+            """, (
                 usuario.id_rol,
                 usuario.id_semillero,
                 usuario.nombre_usuario,
                 usuario.correo,
                 usuario.documento,
                 usuario.telefono,
-                usuario.fecha_registro,
-                usuario.id_estado
+                usuario.estado,
+                usuario.contrasena
+            ))
+
+            nuevo_usuario = cursor.fetchone()
+            conn.commit()
+
+            return nuevo_usuario["id_usuario"]
+
+        except HTTPException:
+            if conn is not None:
+                conn.rollback()
+            raise
+        except Exception:
+            if conn is not None:
+                conn.rollback()
+            raise HTTPException(
+                status_code=500,
+                detail="Error al registrar el usuario. Verifica los datos y sus relaciones."
             )
-        )
-
-        nuevo_id = cursor.fetchone()["id_usuario"]
-
-        conn.commit()
-        conn.close()
-
-        return nuevo_id
+        finally:
+            if conn is not None:
+                conn.close()
 
     def eliminar(self, usuario_id: int):
-        conn = self.db.get_connection()
-        cursor = conn.cursor()
+        conn = None
+        try:
+            conn = self.db.get_connection()
 
-        cursor.execute("""
-            DELETE FROM usuario
-            WHERE id_usuario = %s
-            RETURNING id_usuario;
-        """, (usuario_id,))
+            if conn is None:
+                raise HTTPException(
+                    status_code=500,
+                    detail="No fue posible conectar con la base de datos"
+                )
 
-        eliminado = cursor.fetchone()
+            cursor = conn.cursor()
 
-        conn.commit()
-        conn.close()
+            # Se desactiva el usuario para conservar sus registros relacionados.
+            cursor.execute("""
+                UPDATE usuario
+                SET estado = FALSE,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id_usuario = %s
+                  AND estado = TRUE
+                RETURNING id_usuario;
+            """, (usuario_id,))
 
-        return eliminado is not None
+            eliminado = cursor.fetchone()
+
+            if eliminado is None:
+                raise HTTPException(
+                    status_code=404,
+                    detail="Usuario no encontrado o ya inactivo"
+                )
+
+            conn.commit()
+            return True
+
+        except HTTPException:
+            if conn is not None:
+                conn.rollback()
+            raise
+        except Exception:
+            if conn is not None:
+                conn.rollback()
+            raise HTTPException(
+                status_code=500,
+                detail="Error al desactivar el usuario"
+            )
+        finally:
+            if conn is not None:
+                conn.close()
 
     def actualizar(self, usuario_id: int, usuario: Usuario):
-        conn = self.db.get_connection()
-        cursor = conn.cursor()
+        conn = None
+        try:
+            conn = self.db.get_connection()
 
-        query = """
-            UPDATE usuario
-            SET id_rol = %s,
-                id_semillero = %s,
-                nombre_usuario = %s,
-                correo = %s,
-                documento = %s,
-                telefono = %s,
-                fecha_registro = %s,
-                id_estado = %s
-            WHERE id_usuario = %s
-            RETURNING id_usuario;
-        """
+            if conn is None:
+                raise HTTPException(
+                    status_code=500,
+                    detail="No fue posible conectar con la base de datos"
+                )
 
-        cursor.execute(
-            query,
-            (
+            cursor = conn.cursor()
+
+            cursor.execute("""
+                UPDATE usuario
+                SET id_rol = %s,
+                    id_semillero = %s,
+                    nombre_usuario = %s,
+                    correo = %s,
+                    documento = %s,
+                    telefono = %s,
+                    estado = %s,
+                    updated_at = CURRENT_TIMESTAMP,
+                    contrasena = %s
+                WHERE id_usuario = %s
+                RETURNING id_usuario;
+            """, (
                 usuario.id_rol,
                 usuario.id_semillero,
                 usuario.nombre_usuario,
                 usuario.correo,
                 usuario.documento,
                 usuario.telefono,
-                usuario.fecha_registro,
-                usuario.id_estado,
+                usuario.estado,
+                usuario.contrasena,
                 usuario_id
+            ))
+
+            actualizado = cursor.fetchone()
+
+            if actualizado is None:
+                raise HTTPException(
+                    status_code=404,
+                    detail="Usuario no encontrado"
+                )
+
+            conn.commit()
+            return True
+
+        except HTTPException:
+            if conn is not None:
+                conn.rollback()
+            raise
+        except Exception:
+            if conn is not None:
+                conn.rollback()
+            raise HTTPException(
+                status_code=500,
+                detail="Error al actualizar el usuario. Verifica los datos y sus relaciones."
             )
-        )
-
-        actualizado = cursor.fetchone()
-
-        conn.commit()
-        conn.close()
-
-        return actualizado is not None
+        finally:
+            if conn is not None:
+                conn.close()

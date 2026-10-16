@@ -1,6 +1,6 @@
 from pydantic import BaseModel
 from typing import Optional
-from datetime import date, time
+from datetime import date, time, datetime
 
 class Reunion(BaseModel):
     id_reunion: Optional[int] = None
@@ -10,4 +10,4 @@ class Reunion(BaseModel):
     hora_fin: Optional[time] = None
     tema: str
     descripcion: Optional[str] = None
-    id_estado: int
+    estado: bool = True

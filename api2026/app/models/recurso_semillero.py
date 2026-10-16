@@ -1,13 +1,12 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional
-from datetime import date
+from datetime import datetime
 
 class RecursoSemillero(BaseModel):
     id_recurso: Optional[int] = None
     id_semillero: int
     nombre: str
     tipo: str
-    cantidad: int = 1
+    cantidad: int = Field(default=1, ge=0)
     descripcion: Optional[str] = None
-    id_estado: int
-    fecha_registro: Optional[date] = None
+    estado: bool = True

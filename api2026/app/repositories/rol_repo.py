@@ -1,5 +1,7 @@
+from fastapi import HTTPException
 from app.core.database import Database
 from app.models.rol import Rol
+
 
 class RolRepository:
 
@@ -7,105 +9,168 @@ class RolRepository:
         self.db = Database()
 
     def obtener_todos(self):
-        conn = self.db.get_connection()
-        cursor = conn.cursor()
+        try:
+            conn = self.db.get_connection()
+            cursor = conn.cursor()
 
-        cursor.execute("""
-            SELECT *
-            FROM rol
-            ORDER BY id_rol ASC;
-        """)
+            cursor.execute("""
+                SELECT *
+                FROM rol
+                ORDER BY id_rol ASC;
+            """)
 
-        roles = cursor.fetchall()
-        conn.close()
+            roles = cursor.fetchall()
+            conn.close()
 
-        return roles
+            return roles
+
+        except Exception as e:
+            raise HTTPException(
+                status_code=500,
+                detail="Error al obtener los roles"
+            )
 
     def obtener_por_id(self, rol_id: int):
-        conn = self.db.get_connection()
-        cursor = conn.cursor()
+        try:
+            conn = self.db.get_connection()
+            cursor = conn.cursor()
 
-        cursor.execute("""
-            SELECT *
-            FROM rol
-            WHERE id_rol = %s;
-        """, (rol_id,))
+            cursor.execute("""
+                SELECT *
+                FROM rol
+                WHERE id_rol = %s;
+            """, (rol_id,))
 
-        rol = cursor.fetchone()
-        conn.close()
+            rol = cursor.fetchone()
+            conn.close()
 
-        return rol
+            if not rol:
+                raise HTTPException(
+                    status_code=404,
+                    detail="Rol no encontrado"
+                )
+
+            return rol
+
+        except HTTPException:
+            raise
+
+        except Exception as e:
+            raise HTTPException(
+                status_code=500,
+                detail="Error al obtener el rol"
+            )
 
     def crear(self, rol: Rol):
-        conn = self.db.get_connection()
-        cursor = conn.cursor()
+        try:
+            conn = self.db.get_connection()
+            cursor = conn.cursor()
 
-        query = """
-            INSERT INTO rol
-            (nombre, descripcion, id_estado)
-            VALUES (%s, %s, %s)
-            RETURNING id_rol;
-        """
+            query = """
+                INSERT INTO rol
+                (nombre, descripcion, estado)
+                VALUES (%s, %s, %s)
+                RETURNING id_rol;
+            """
 
-        cursor.execute(
-            query,
-            (
-                rol.nombre,
-                rol.descripcion,
-                rol.id_estado
+            cursor.execute(
+                query,
+                (
+                    rol.nombre,
+                    rol.descripcion,
+                    rol.estado
+                )
             )
-        )
 
-        nuevo_id = cursor.fetchone()["id_rol"]
+            nuevo_id = cursor.fetchone()["id_rol"]
 
-        conn.commit()
-        conn.close()
+            conn.commit()
+            conn.close()
 
-        return nuevo_id
+            return nuevo_id
+
+        except Exception as e:
+            raise HTTPException(
+                status_code=500,
+                detail="Error al registrar el rol"
+            )
 
     def eliminar(self, rol_id: int):
-        conn = self.db.get_connection()
-        cursor = conn.cursor()
+        try:
+            conn = self.db.get_connection()
+            cursor = conn.cursor()
 
-        cursor.execute("""
-            DELETE FROM rol
-            WHERE id_rol = %s
-            RETURNING id_rol;
-        """, (rol_id,))
+            cursor.execute("""
+                DELETE FROM rol
+                WHERE id_rol = %s
+                RETURNING id_rol;
+            """, (rol_id,))
 
-        eliminado = cursor.fetchone()
+            eliminado = cursor.fetchone()
 
-        conn.commit()
-        conn.close()
+            conn.commit()
+            conn.close()
 
-        return eliminado is not None
+            if eliminado is None:
+                raise HTTPException(
+                    status_code=404,
+                    detail="Rol no encontrado"
+                )
+
+            return True
+
+        except HTTPException:
+            raise
+
+        except Exception as e:
+            raise HTTPException(
+                status_code=500,
+                detail="Error al eliminar el rol"
+            )
 
     def actualizar(self, rol_id: int, rol: Rol):
-        conn = self.db.get_connection()
-        cursor = conn.cursor()
+        try:
+            conn = self.db.get_connection()
+            cursor = conn.cursor()
 
-        query = """
-            UPDATE rol
-            SET nombre = %s,
-                descripcion = %s,
-                id_estado = %s
-            WHERE id_rol = %s
-            RETURNING id_rol;
-        """
+            query = """
+                UPDATE rol
+                SET nombre = %s,
+                    descripcion = %s,
+                    estado = %s,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id_rol = %s
+                RETURNING id_rol;
+            """
 
-        cursor.execute(
-            query,
-            (
-                rol.nombre,
-                rol.descripcion,
-                rol.id_estado,
-                rol_id
+            cursor.execute(
+                query,
+                (
+                    rol.nombre,
+                    rol.descripcion,
+                    rol.estado,
+                    rol_id
+                )
             )
-        )
 
-        actualizado = cursor.fetchone()
+            actualizado = cursor.fetchone()
 
-        conn.commit()
-        conn.close()
+            conn.commit()
+            conn.close()
 
-        return actualizado is not None
+            if actualizado is None:
+                raise HTTPException(
+                    status_code=404,
+                    detail="Rol no encontrado"
+                )
+
+            return True
+
+        except HTTPException:
+            raise
+
+        except Exception as e:
+            raise HTTPException(
+                status_code=500,
+                detail="Error al actualizar el rol"
+            )

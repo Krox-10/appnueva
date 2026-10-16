@@ -1,5 +1,7 @@
+from fastapi import HTTPException
 from app.core.database import Database
 from app.models.linea_investigacion import LineaInvestigacion
+
 
 class LineaInvestigacionRepository:
 
@@ -7,108 +9,168 @@ class LineaInvestigacionRepository:
         self.db = Database()
 
     def obtener_todos(self):
-        conn = self.db.get_connection()
-        cursor = conn.cursor()
+        try:
+            conn = self.db.get_connection()
+            cursor = conn.cursor()
 
-        cursor.execute("""
-            SELECT *
-            FROM linea_investigacion
-            ORDER BY id_linea ASC;
-        """)
+            cursor.execute("""
+                SELECT *
+                FROM linea_investigacion
+                ORDER BY id_linea ASC;
+            """)
 
-        lineas = cursor.fetchall()
-        conn.close()
+            lineas = cursor.fetchall()
+            conn.close()
 
-        return lineas
+            return lineas
+
+        except Exception as e:
+            raise HTTPException(
+                status_code=500,
+                detail="Error al obtener las líneas de investigación"
+            )
 
     def obtener_por_id(self, linea_id: int):
-        conn = self.db.get_connection()
-        cursor = conn.cursor()
+        try:
+            conn = self.db.get_connection()
+            cursor = conn.cursor()
 
-        cursor.execute("""
-            SELECT *
-            FROM linea_investigacion
-            WHERE id_linea = %s;
-        """, (linea_id,))
+            cursor.execute("""
+                SELECT *
+                FROM linea_investigacion
+                WHERE id_linea = %s;
+            """, (linea_id,))
 
-        linea = cursor.fetchone()
-        conn.close()
+            linea = cursor.fetchone()
+            conn.close()
 
-        return linea
+            if not linea:
+                raise HTTPException(
+                    status_code=404,
+                    detail="Línea de investigación no encontrada"
+                )
+
+            return linea
+
+        except HTTPException:
+            raise
+
+        except Exception as e:
+            raise HTTPException(
+                status_code=500,
+                detail="Error al obtener la línea de investigación"
+            )
 
     def crear(self, linea: LineaInvestigacion):
-        conn = self.db.get_connection()
-        cursor = conn.cursor()
+        try:
+            conn = self.db.get_connection()
+            cursor = conn.cursor()
 
-        query = """
-            INSERT INTO linea_investigacion
-            (nombre, descripcion, fecha_creacion, id_estado)
-            VALUES (%s, %s, %s, %s)
-            RETURNING id_linea;
-        """
+            query = """
+                INSERT INTO linea_investigacion
+                (nombre, descripcion, estado)
+                VALUES (%s, %s, %s)
+                RETURNING id_linea;
+            """
 
-        cursor.execute(
-            query,
-            (
-                linea.nombre,
-                linea.descripcion,
-                linea.fecha_creacion,
-                linea.id_estado
+            cursor.execute(
+                query,
+                (
+                    linea.nombre,
+                    linea.descripcion,
+                    linea.estado
+                )
             )
-        )
 
-        nuevo_id = cursor.fetchone()["id_linea"]
+            nuevo_id = cursor.fetchone()["id_linea"]
 
-        conn.commit()
-        conn.close()
+            conn.commit()
+            conn.close()
 
-        return nuevo_id
+            return nuevo_id
+
+        except Exception as e:
+            raise HTTPException(
+                status_code=500,
+                detail="Error al registrar la línea de investigación"
+            )
 
     def eliminar(self, linea_id: int):
-        conn = self.db.get_connection()
-        cursor = conn.cursor()
+        try:
+            conn = self.db.get_connection()
+            cursor = conn.cursor()
 
-        cursor.execute("""
-            DELETE FROM linea_investigacion
-            WHERE id_linea = %s
-            RETURNING id_linea;
-        """, (linea_id,))
+            cursor.execute("""
+                DELETE FROM linea_investigacion
+                WHERE id_linea = %s
+                RETURNING id_linea;
+            """, (linea_id,))
 
-        eliminado = cursor.fetchone()
+            eliminado = cursor.fetchone()
 
-        conn.commit()
-        conn.close()
+            conn.commit()
+            conn.close()
 
-        return eliminado is not None
+            if eliminado is None:
+                raise HTTPException(
+                    status_code=404,
+                    detail="Línea de investigación no encontrada"
+                )
+
+            return True
+
+        except HTTPException:
+            raise
+
+        except Exception as e:
+            raise HTTPException(
+                status_code=500,
+                detail="Error al eliminar la línea de investigación"
+            )
 
     def actualizar(self, linea_id: int, linea: LineaInvestigacion):
-        conn = self.db.get_connection()
-        cursor = conn.cursor()
+        try:
+            conn = self.db.get_connection()
+            cursor = conn.cursor()
 
-        query = """
-            UPDATE linea_investigacion
-            SET nombre = %s,
-                descripcion = %s,
-                fecha_creacion = %s,
-                id_estado = %s
-            WHERE id_linea = %s
-            RETURNING id_linea;
-        """
+            query = """
+                UPDATE linea_investigacion
+                SET nombre = %s,
+                    descripcion = %s,
+                    estado = %s,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id_linea = %s
+                RETURNING id_linea;
+            """
 
-        cursor.execute(
-            query,
-            (
-                linea.nombre,
-                linea.descripcion,
-                linea.fecha_creacion,
-                linea.id_estado,
-                linea_id
+            cursor.execute(
+                query,
+                (
+                    linea.nombre,
+                    linea.descripcion,
+                    linea.estado,
+                    linea_id
+                )
             )
-        )
 
-        actualizado = cursor.fetchone()
+            actualizado = cursor.fetchone()
 
-        conn.commit()
-        conn.close()
+            conn.commit()
+            conn.close()
 
-        return actualizado is not None
+            if actualizado is None:
+                raise HTTPException(
+                    status_code=404,
+                    detail="Línea de investigación no encontrada"
+                )
+
+            return True
+
+        except HTTPException:
+            raise
+
+        except Exception as e:
+            raise HTTPException(
+                status_code=500,
+                detail="Error al actualizar la línea de investigación"
+            )
