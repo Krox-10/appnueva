@@ -5,7 +5,7 @@ from app.repositories.asistencia_reunion_repo import AsistenciaReunionRepository
 
 
 router = APIRouter(
-    prefix="/asistencias",
+    prefix="/asistencia_reunion",
     tags=["Gestión de Asistencias"]
 )
 

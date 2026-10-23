@@ -6,5 +6,5 @@ class AsistenciaReunion(BaseModel):
     id_asistencia: Optional[int] = None
     id_reunion: int
     id_usuario: int
-    asistio: bool = False
+    asistio: Optional[bool] = None
     estado: bool = True

@@ -1,6 +1,7 @@
 from fastapi import HTTPException
 from app.core.database import Database
 from app.models.usuario import Usuario
+from app.core.passwords import hash_password
 
 
 class UsuarioRepository:
@@ -22,7 +23,8 @@ class UsuarioRepository:
             cursor = conn.cursor()
 
             cursor.execute("""
-                SELECT *
+                  SELECT id_usuario, id_rol, id_semillero, nombre_usuario,
+                      correo, documento, telefono, estado
                 FROM usuario
                 ORDER BY id_usuario ASC;
             """)
@@ -54,7 +56,8 @@ class UsuarioRepository:
             cursor = conn.cursor()
 
             cursor.execute("""
-                SELECT *
+                  SELECT id_usuario, id_rol, id_semillero, nombre_usuario,
+                      correo, documento, telefono, estado
                 FROM usuario
                 WHERE id_usuario = %s;
             """, (usuario_id,))
@@ -114,7 +117,7 @@ class UsuarioRepository:
                 usuario.documento,
                 usuario.telefono,
                 usuario.estado,
-                usuario.contrasena
+                hash_password(usuario.contrasena)
             ))
 
             nuevo_usuario = cursor.fetchone()
@@ -197,6 +200,12 @@ class UsuarioRepository:
                     detail="No fue posible conectar con la base de datos"
                 )
 
+            contrasena_hash = (
+                hash_password(usuario.contrasena)
+                if usuario.contrasena
+                else None
+            )
+
             cursor = conn.cursor()
 
             cursor.execute("""
@@ -209,7 +218,7 @@ class UsuarioRepository:
                     telefono = %s,
                     estado = %s,
                     updated_at = CURRENT_TIMESTAMP,
-                    contrasena = %s
+                    contrasena = COALESCE(%s, contrasena)
                 WHERE id_usuario = %s
                 RETURNING id_usuario;
             """, (
@@ -220,7 +229,7 @@ class UsuarioRepository:
                 usuario.documento,
                 usuario.telefono,
                 usuario.estado,
-                usuario.contrasena,
+                contrasena_hash,
                 usuario_id
             ))
 

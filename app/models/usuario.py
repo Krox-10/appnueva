@@ -1,6 +1,5 @@
 from pydantic import BaseModel
 from typing import Optional
-from datetime import datetime
 
 class Usuario(BaseModel):
     id_usuario: Optional[int] = None
@@ -11,4 +10,4 @@ class Usuario(BaseModel):
     documento: str
     telefono: Optional[str] = None
     estado: bool = True
-    contrasena: str
+    contrasena: Optional[str] = None
